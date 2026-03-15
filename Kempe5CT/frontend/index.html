@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Kempe-Based Method for 5CT</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@800&display=swap" rel="stylesheet">
+  <style>
+:root {
+  --bg:#07090f;--surface:#0c1018;--panel:#0a0e18;--border:#162030;
+  --border2:#1e3048;--text:#9ab0cc;--bright:#c8daf0;--muted:#334d68;
+  --accent:#4a90d9;--green:#3db87a;--amber:#d9943a;--red:#d95a5a;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text);
+     height:100vh;display:grid;grid-template-rows:44px 1fr;grid-template-columns:1fr 288px;overflow:hidden}
+header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);
+       display:flex;align-items:center;gap:12px;padding:0 14px;flex-shrink:0}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:13px;letter-spacing:.07em;color:var(--bright);white-space:nowrap}
+.sep{width:1px;height:18px;background:var(--border2);flex-shrink:0}
+.stat{font-size:10px;color:var(--muted);white-space:nowrap}
+.stat b{color:var(--bright);font-weight:600}
+.badge{display:flex;align-items:center;gap:5px;font-size:10px;padding:2px 8px;
+       border-radius:20px;border:1px solid var(--border2);background:rgba(255,255,255,.02);white-space:nowrap}
+.bdot{width:5px;height:5px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.badge.running .bdot{background:var(--accent);animation:blink .8s ease-in-out infinite}
+.badge.done .bdot{background:var(--green)}
+.badge.error .bdot{background:var(--red)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.spacer{flex:1}
+.btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border:1px solid var(--border2);
+     border-radius:4px;background:rgba(255,255,255,.02);color:var(--text);font-family:inherit;
+     font-size:10px;font-weight:600;cursor:pointer;letter-spacing:.05em;white-space:nowrap;
+     transition:background .12s,border-color .12s,color .12s}
+.btn:hover{background:rgba(74,144,217,.12);border-color:var(--accent);color:var(--bright)}
+.btn:active{opacity:.8}
+.btn:disabled{opacity:.3;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#3a7bc8}
+.btn.primary:disabled{opacity:.3;cursor:not-allowed}
+#speedWrap{display:flex;align-items:center;gap:6px;font-size:9px;color:var(--muted)}
+#speedSlider{width:70px;accent-color:var(--accent);cursor:pointer}
+kbd{font-family:inherit;font-size:8px;padding:1px 3px;border-radius:3px;
+    background:rgba(255,255,255,.07);border:1px solid var(--border2);color:var(--muted)}
+#graph-panel{position:relative;background:var(--bg);overflow:hidden}
+.link{stroke:var(--border2);stroke-width:1.5;stroke-opacity:.9;transition:stroke .2s}
+.link.hi{stroke:var(--accent);stroke-opacity:1;stroke-width:2.5}
+.node-g{cursor:pointer}
+.node-circle{transition:r .35s}
+.node-ring{fill:none;opacity:.25}
+.node-label{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;
+            fill:#fff;dominant-baseline:middle;text-anchor:middle;pointer-events:none}
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+       justify-content:center;gap:12px;pointer-events:none}
+#empty p{font-size:11px;color:var(--muted);text-align:center;line-height:1.9;max-width:220px}
+#scrubber-bar{position:absolute;bottom:0;left:0;right:0;height:28px;
+              background:rgba(10,14,24,.85);border-top:1px solid var(--border);
+              display:flex;align-items:center;gap:10px;padding:0 12px;font-size:9px;color:var(--muted)}
+#historySlider{flex:1;accent-color:var(--accent);cursor:pointer;height:2px}
+#sidebar{background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sec{border-bottom:1px solid var(--border);flex-shrink:0}
+.sec.grow{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.sec-h{display:flex;align-items:center;justify-content:space-between;padding:8px 13px;
+       font-size:9px;font-weight:600;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;
+       cursor:pointer;user-select:none;flex-shrink:0}
+.sec-h:hover{color:var(--text)}
+.sec-h .arr{transition:transform .18s;font-size:10px}
+.sec-h.collapsed .arr{transform:rotate(-90deg)}
+.sec-body{padding:10px 13px}
+.sec-body.hidden{display:none}
+.prop-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.prop-card{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:4px;padding:7px 9px}
+.prop-card-l{font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.prop-card-v{font-size:15px;font-weight:600;color:var(--bright);margin-top:2px}
+.prop-card-v.good{color:var(--green)}
+.prop-card-v.bad{color:var(--amber)}
+.irow{display:flex;justify-content:space-between;padding:3px 0;font-size:10px;border-bottom:1px solid rgba(255,255,255,.04)}
+.irow:last-child{border:none}
+.il{color:var(--muted)}.iv{color:var(--bright);font-weight:500}
+.swatch{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.chips{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px}
+.chip{font-size:9px;padding:1px 6px;border-radius:8px;border:1px solid var(--border2);color:var(--muted)}
+.no-data{font-size:10px;color:var(--muted);text-align:center;padding:8px 0}
+.leg-row{display:flex;align-items:center;gap:7px;font-size:10px;margin-bottom:4px}
+.leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.leg-cnt{margin-left:auto;color:var(--muted);font-size:9px}
+.matrix-scroll{overflow:auto;max-height:200px}
+.mtbl{border-collapse:collapse;font-size:9px}
+.mtbl th,.mtbl td{width:19px;height:19px;text-align:center;border:1px solid rgba(255,255,255,.04)}
+.mtbl th{color:var(--muted);font-weight:400;background:rgba(255,255,255,.02)}
+.mtbl .e1{background:rgba(74,144,217,.2);color:var(--accent)}
+.mtbl .deg{background:rgba(255,255,255,.02);color:var(--muted);border-left:1px solid var(--border2)}
+.mtbl .degh{color:#3ab8c4;border-left:1px solid var(--border2)}
+.mtbl .self{background:rgba(255,255,255,.015);color:var(--muted)}
+.mtbl .hl{background:rgba(74,144,217,.07)}
+.export-btn{display:block;width:100%;margin-top:8px;padding:5px;border-radius:4px;
+            border:1px solid var(--border2);background:transparent;color:var(--muted);
+            font-family:inherit;font-size:9px;cursor:pointer;letter-spacing:.06em;
+            text-transform:uppercase;transition:all .12s}
+.export-btn:hover{border-color:var(--accent);color:var(--accent)}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="logo">Kempe-Based Method for 5CT</span>
+  <div class="sep"></div>
+  <span class="stat">ITER  <b id="hIter">—</b></span>
+  <span class="stat">NODES <b id="hNodes">—</b></span>
+  <span class="stat">EDGES <b id="hEdges">—</b></span>
+  <div class="sep"></div>
+  <div class="badge" id="badge"><div class="bdot"></div><span id="badgeText">Idle</span></div>
+  <div class="spacer"></div>
+  <button class="btn" id="backBtn" disabled>‹ BACK</button>
+  <button class="btn primary" id="stepBtn">STEP <kbd>↵</kbd></button>
+  <button class="btn" id="playBtn">▶ PLAY</button>
+  <div id="speedWrap">SPEED <input type="range" id="speedSlider" min="1" max="10" value="4"/></div>
+  <div class="sep"></div>
+  <button class="btn" id="loadBtn">⬆ LOAD GRAPH</button>
+  <button class="btn" id="fitBtn">FIT</button>
+  <button class="btn" id="resetBtn">RESET</button>
+</header>
+
+<div id="graph-panel">
+  <div id="empty">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#334d68" stroke-width="1.2">
+      <circle cx="5" cy="12" r="3"/><circle cx="19" cy="5" r="3"/><circle cx="19" cy="19" r="3"/>
+      <line x1="8" y1="11" x2="16" y2="6"/><line x1="8" y1="13" x2="16" y2="18"/>
+    </svg>
+    <p>Press <strong style="color:#9ab0cc">STEP</strong> or <kbd>Enter</kbd><br>to run the first iteration.</p>
+  </div>
+  <div id="scrubber-bar" style="display:none">
+    <span>HISTORY</span>
+    <input type="range" id="historySlider" min="0" max="0" value="0"/>
+    <span id="historyLabel">0 / 0</span>
+  </div>
+</div>
+
+<div id="sidebar">
+  <div class="sec">
+    <div class="sec-h">Properties <span class="arr">▾</span></div>
+    <div class="sec-body">
+      <div class="prop-grid">
+        <div class="prop-card"><div class="prop-card-l">Density</div>   <div class="prop-card-v" id="pDensity">—</div></div>
+        <div class="prop-card"><div class="prop-card-l">Avg Degree</div><div class="prop-card-v" id="pAvgDeg">—</div></div>
+        <div class="prop-card"><div class="prop-card-l">Connected</div> <div class="prop-card-v" id="pConnected">—</div></div>
+        <div class="prop-card"><div class="prop-card-l">Colors Used</div><div class="prop-card-v" id="pColors">—</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="sec-h">Node Inspector <span class="arr">▾</span></div>
+    <div class="sec-body">
+      <div id="inspEmpty" class="no-data">Click a node</div>
+      <div id="inspDetail" style="display:none"></div>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="sec-h">Color Map <span class="arr">▾</span></div>
+    <div class="sec-body"><div id="colorMap"><span class="no-data">No data</span></div></div>
+  </div>
+  <div class="sec grow">
+    <div class="sec-h">Adjacency Matrix <span class="arr">▾</span></div>
+    <div class="sec-body" style="overflow:hidden;display:flex;flex-direction:column;flex:1">
+      <div class="matrix-scroll" style="flex:1"><table class="mtbl" id="matrix"></table></div>
+      <button class="export-btn" id="exportBtn">⬇ Export state as JSON</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SERVER = "http://localhost:5000";
+
+const PALETTE = [
+  "#000000",  // 0 = uncoloured / deleted
+  "#e53935",  // 1 = red
+  "#43a047",  // 2 = green
+  "#1e88e5",  // 3 = blue
+  "#fdd835",  // 4 = yellow
+  "#ffffff",  // 5 = white
+];
+const nodeColor = i => PALETTE[i % PALETTE.length];
+
+const history = [];
+let historyIdx = -1;
+let currentState = { n:0, matrix:[], colors:[], iteration:-1, status:"idle" };
+let selectedNodeId = null;
+let isPlaying = false;
+let playTimer = null;
+let posCache = {};
+
+const panel = document.getElementById("graph-panel");
+const svg   = d3.select(panel).append("svg").attr("width","100%").attr("height","100%");
+const defs  = svg.append("defs");
+defs.append("pattern").attr("id","grid").attr("width",40).attr("height",40)
+    .attr("patternUnits","userSpaceOnUse")
+    .append("path").attr("d","M40 0L0 0 0 40").attr("fill","none").attr("stroke","#0c1018").attr("stroke-width","1");
+svg.append("rect").attr("width","100%").attr("height","100%").attr("fill","url(#grid)");
+const zoom = d3.zoom().scaleExtent([0.08,10]).on("zoom", e => root.attr("transform", e.transform));
+svg.call(zoom);
+svg.on("click", () => selectNode(null));
+const root  = svg.append("g");
+const linkG = root.append("g");
+const nodeG = root.append("g");
+let simulation = null;
+
+function deriveGraph({ n, matrix, colors }) {
+  const nodes=[], links=[], seen=new Set();
+  for (let i=0; i<n; i++) {
+    if (matrix[i]?.[n] >= 0) nodes.push({ id:i, color:colors[i], degree:matrix[i][n] });
+  }
+  const active = new Set(nodes.map(d=>d.id));
+  for (let i=0; i<n; i++) {
+    if (!active.has(i)) continue;
+    for (let j=i+1; j<n; j++) {
+      if (!active.has(j) || !matrix[i][j]) continue;
+      const key=`${i}-${j}`;
+      if (!seen.has(key)) { seen.add(key); links.push({source:i, target:j}); }
+    }
+  }
+  return { nodes, links };
+}
+
+function renderGraph(state) {
+  const { nodes, links } = deriveGraph(state);
+  const W=panel.clientWidth, H=panel.clientHeight;
+  // empty message handled on boot only
+  nodeG.selectAll(".node-g").each(d => { posCache[d.id]={x:d.x,y:d.y}; });
+  nodes.forEach(n => {
+    const c=posCache[n.id];
+    n.x = c ? c.x : W/2+(Math.random()-.5)*220;
+    n.y = c ? c.y : H/2+(Math.random()-.5)*220;
+  });
+  if (simulation) simulation.stop();
+  const padding = 48;
+  simulation = d3.forceSimulation(nodes)
+    .force("link",    d3.forceLink(links).id(d=>d.id).distance(88).strength(.5))
+    .force("charge",  d3.forceManyBody().strength(-320))
+    .force("center",  d3.forceCenter(W/2, H/2-14))
+    .force("collide", d3.forceCollide(28))
+    .force("boundary", () => {
+      for (const n of nodes) {
+        n.x = Math.max(padding, Math.min(W - padding, n.x));
+        n.y = Math.max(padding, Math.min(H - 42 - padding, n.y));
+      }
+    })
+    .alphaDecay(.03)
+    .velocityDecay(.4);
+  const lSel = linkG.selectAll(".link").data(links, d=>`${d.source.id??d.source}-${d.target.id??d.target}`);
+  lSel.enter().append("line").attr("class","link").merge(lSel)
+      .classed("hi", d => selectedNodeId!==null && (d.source.id===selectedNodeId||d.target.id===selectedNodeId));
+  lSel.exit().remove();
+  const nSel = nodeG.selectAll(".node-g").data(nodes, d=>d.id);
+  const entered = nSel.enter().append("g").attr("class","node-g")
+    .call(d3.drag()
+      .on("start",(e,d)=>{ if(!e.active) simulation.alphaTarget(.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on("drag", (e,d)=>{ d.fx=e.x; d.fy=e.y; })
+      .on("end",  (e,d)=>{ if(!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }))
+    .on("click",(e,d)=>{ e.stopPropagation(); selectNode(d); });
+  entered.append("circle").attr("class","node-ring");
+  entered.append("circle").attr("class","node-circle");
+  entered.append("text").attr("class","node-label");
+  nSel.exit().remove();
+  const all = entered.merge(nSel);
+  const r = d => 11+Math.min(d.degree*1.4,8);
+  all.select(".node-ring").attr("r",d=>r(d)+7).attr("stroke",d=>nodeColor(d.color)).attr("stroke-width",1.5);
+  all.select(".node-circle").attr("r",r).attr("fill",d=>nodeColor(d.color)).attr("stroke",d=>nodeColor(d.color))
+     .attr("stroke-width",d=>d.id===selectedNodeId?3:1.5)
+     .style("filter",d=>`drop-shadow(0 0 6px ${nodeColor(d.color)}77)`);
+  all.select(".node-label").text(d=>d.id)
+     .attr("fill", d => (d.color===4||d.color===5) ? "#111" : "#fff");
+  simulation.on("tick",()=>{
+    linkG.selectAll(".link").attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+    nodeG.selectAll(".node-g").attr("transform",d=>`translate(${d.x},${d.y})`);
+  });
+  return { nodes, links };
+}
+
+function isConnected(state, nodes) {
+  if (nodes.length<=1) return true;
+  const active=new Set(nodes.map(d=>d.id)), visited=new Set(), queue=[nodes[0].id];
+  visited.add(nodes[0].id);
+  while (queue.length) {
+    const cur=queue.shift();
+    for (let j=0; j<state.n; j++) {
+      if (active.has(j)&&!visited.has(j)&&state.matrix[cur][j]) { visited.add(j); queue.push(j); }
+    }
+  }
+  return visited.size===nodes.length;
+}
+
+function renderProps(state, nodes, links) {
+  if (!nodes.length) { ["pDensity","pAvgDeg","pConnected","pColors"].forEach(id=>document.getElementById(id).textContent="—"); return; }
+  const n=nodes.length, e=links.length, maxE=n*(n-1)/2;
+  const density=maxE>0?e/maxE:0, avgDeg=nodes.reduce((s,d)=>s+d.degree,0)/n;
+  const connected=isConnected(state,nodes), colors=new Set(nodes.map(d=>d.color)).size;
+  const sv=(id,t,c)=>{ const el=document.getElementById(id); el.textContent=t; el.className="prop-card-v"+(c?" "+c:""); };
+  sv("pDensity",density.toFixed(3)); sv("pAvgDeg",avgDeg.toFixed(2));
+  sv("pConnected",connected?"Yes":"No",connected?"good":"bad"); sv("pColors",colors);
+}
+
+function renderColorMap(nodes) {
+  const el=document.getElementById("colorMap");
+  if (!nodes.length) { el.innerHTML='<span class="no-data">No data</span>'; return; }
+  const counts={};
+  nodes.forEach(n=>{ counts[n.color]=(counts[n.color]||0)+1; });
+  el.innerHTML=Object.entries(counts).sort((a,b)=>+a[0]-+b[0]).map(([ci,cnt])=>
+    `<div class="leg-row"><span class="leg-dot" style="background:${nodeColor(+ci)}"></span>
+     <span>Color ${ci}</span><span class="leg-cnt">${cnt} node${cnt>1?"s":""}</span></div>`).join("");
+}
+
+function renderMatrix(state, nodes) {
+  const {n,matrix}=state, ids=nodes.map(d=>d.id), tbl=document.getElementById("matrix");
+  if (!ids.length) { tbl.innerHTML='<tr><td class="no-data" style="padding:8px">No active nodes</td></tr>'; return; }
+  let h=`<thead><tr><th></th>${ids.map(i=>`<th>${i}</th>`).join("")}<th class="degh">d</th></tr></thead><tbody>`;
+  ids.forEach(i=>{
+    h+=`<tr><th>${i}</th>`;
+    ids.forEach(j=>{
+      const v=matrix[i][j];
+      const cls=[i===j?"self":"",v&&i!==j?"e1":"",i===selectedNodeId?"hl":""].filter(Boolean).join(" ");
+      h+=`<td class="${cls}">${i===j?"·":v}</td>`;
+    });
+    h+=`<td class="deg">${matrix[i][n]}</td></tr>`;
+  });
+  tbl.innerHTML=h+"</tbody>";
+}
+
+function renderInspector(node, state) {
+  const empty=document.getElementById("inspEmpty"), detail=document.getElementById("inspDetail");
+  if (!node) { empty.style.display="block"; detail.style.display="none"; return; }
+  empty.style.display="none"; detail.style.display="block";
+  const {n,matrix}=state, nbrs=[];
+  for (let j=0;j<n;j++) if(j!==node.id&&matrix[node.id]?.[j]) nbrs.push(j);
+  detail.innerHTML=`
+    <div class="irow"><span class="il">Node</span><span class="iv">${node.id}</span></div>
+    <div class="irow"><span class="il">Degree</span><span class="iv">${node.degree}</span></div>
+    <div class="irow"><span class="il">Color</span><span class="iv"><span class="swatch" style="background:${nodeColor(node.color)}"></span>${node.color}</span></div>
+    <div class="irow"><span class="il">Neighbors</span><span class="iv">${nbrs.length}</span></div>
+    <div class="chips">${nbrs.map(j=>`<span class="chip">${j}</span>`).join("")}</div>`;
+}
+
+function applyState(state, skipRender=false) {
+  currentState=state;
+  document.getElementById("hIter").textContent  = state.iteration>=0?state.iteration:"—";
+  const {nodes,links}=skipRender?deriveGraph(state):renderGraph(state);
+  document.getElementById("hNodes").textContent = state.n ? `${nodes.length}/${state.n}` : "—";
+  document.getElementById("hEdges").textContent = links.length||"—";
+  const badge=document.getElementById("badge"), text=document.getElementById("badgeText");
+  badge.className=`badge ${state.status}`;
+  text.textContent=state.status==="done"?"Done":state.status==="running"?(state.message||`Iter ${state.iteration}`):"Idle";
+  renderProps(state,nodes,links); renderColorMap(nodes); renderMatrix(state,nodes);
+  renderInspector(selectedNodeId!==null?nodes.find(n=>n.id===selectedNodeId)||null:null, state);
+  document.getElementById("stepBtn").disabled=state.status==="done";
+  document.getElementById("playBtn").disabled=state.status==="done";
+}
+
+function selectNode(node) {
+  selectedNodeId=node?node.id:null;
+  linkG.selectAll(".link").classed("hi",d=>node&&(d.source.id===node.id||d.target.id===node.id));
+  nodeG.selectAll(".node-circle").attr("stroke-width",d=>d.id===selectedNodeId?3:1.5);
+  renderInspector(node,currentState);
+  renderMatrix(currentState,deriveGraph(currentState).nodes);
+}
+
+function pushHistory(state) {
+  history.splice(historyIdx+1);
+  history.push(JSON.parse(JSON.stringify(state)));
+  historyIdx=history.length-1;
+  updateScrubber();
+}
+
+function updateScrubber() {
+  const bar=document.getElementById("scrubber-bar"), slider=document.getElementById("historySlider");
+  const label=document.getElementById("historyLabel"), back=document.getElementById("backBtn");
+  if (history.length<=1) { bar.style.display="none"; } else {
+    bar.style.display="flex"; slider.max=history.length-1; slider.value=historyIdx;
+    label.textContent=`${historyIdx+1} / ${history.length}`;
+  }
+  back.disabled=historyIdx<=0;
+}
+
+function goToHistory(idx) {
+  if (idx<0||idx>=history.length) return;
+  historyIdx=idx; applyState(history[idx]); updateScrubber();
+}
+
+async function doStep() {
+  // If we're not at the latest point in history, just advance through cache
+  if (historyIdx < history.length - 1) {
+    goToHistory(historyIdx + 1);
+    return;
+  }
+  // We're at the frontier — ask the server for the next iteration
+  if (currentState.status==="done") return;
+  document.getElementById("stepBtn").disabled=true;
+  try {
+    const state=await fetch(`${SERVER}/step`,{method:"POST"}).then(r=>r.json());
+    document.getElementById("empty").style.display = "none";
+    pushHistory(state); applyState(state);
+  } catch(e) {
+    document.getElementById("badge").className="badge error";
+    document.getElementById("badgeText").textContent="Error: "+e.message;
+  } finally {
+    if (currentState.status!=="done") document.getElementById("stepBtn").disabled=false;
+  }
+}
+
+function doBack() { if (historyIdx>0) goToHistory(historyIdx-1); }
+
+function togglePlay() {
+  isPlaying=!isPlaying;
+  document.getElementById("playBtn").textContent=isPlaying?"⏸ PAUSE":"▶ PLAY";
+  if (isPlaying) {
+    const tick=async()=>{
+      if (!isPlaying||currentState.status==="done") { stopPlay(); return; }
+      await doStep();
+      playTimer=setTimeout(tick, 1100-document.getElementById("speedSlider").value*100);
+    };
+    tick();
+  } else stopPlay();
+}
+
+function stopPlay() {
+  isPlaying=false; clearTimeout(playTimer);
+  document.getElementById("playBtn").textContent="▶ PLAY";
+}
+
+async function doReset() {
+  stopPlay(); selectedNodeId=null; posCache={}; history.length=0; historyIdx=-1;
+  nodeG.selectAll("*").remove(); linkG.selectAll("*").remove();
+  document.getElementById("empty").style.display="flex";
+  document.getElementById("scrubber-bar").style.display="none";
+  document.getElementById("backBtn").disabled=true;
+  const state=await fetch(`${SERVER}/reset`,{method:"POST"}).then(r=>r.json());
+  applyState(state);
+}
+
+function doFit() {
+  const b=root.node().getBBox();
+  if (!b.width||!b.height) return;
+  const W=panel.clientWidth, H=panel.clientHeight;
+  const scale=Math.min(.88*W/b.width,.88*H/b.height,3);
+  svg.transition().duration(420).call(zoom.transform,
+    d3.zoomIdentity.translate(W/2-scale*(b.x+b.width/2), H/2-scale*(b.y+b.height/2)).scale(scale));
+}
+
+function doExport() {
+  const a=Object.assign(document.createElement("a"),{
+    href:URL.createObjectURL(new Blob([JSON.stringify(currentState,null,2)],{type:"application/json"})),
+    download:`graph_iter_${currentState.iteration}.json`
+  });
+  a.click();
+}
+
+document.getElementById("stepBtn") .addEventListener("click",e=>{e.currentTarget.blur();doStep();});
+document.getElementById("backBtn") .addEventListener("click",e=>{e.currentTarget.blur();doBack();});
+document.getElementById("playBtn") .addEventListener("click",e=>{e.currentTarget.blur();togglePlay();});
+document.getElementById("resetBtn").addEventListener("click",doReset);
+document.getElementById("fitBtn")  .addEventListener("click",doFit);
+document.getElementById("exportBtn").addEventListener("click",doExport);
+document.getElementById("historySlider").addEventListener("input",e=>goToHistory(+e.target.value));
+
+document.addEventListener("keydown",e=>{
+  const tag=document.activeElement.tagName;
+  if (tag==="INPUT"||tag==="TEXTAREA") return;
+  if (e.key==="Enter" || e.key==="ArrowRight" || e.key===" ") {
+    e.preventDefault();
+    doStep();   // single step only — auto-play is PLAY button only
+  }
+  if (e.key==="ArrowLeft") doBack();
+  if (e.key==="f"||e.key==="F") doFit();
+  if (e.key==="Escape") selectNode(null);
+});
+
+document.querySelectorAll(".sec-h").forEach(h=>{
+  h.addEventListener("click",()=>{
+    h.classList.toggle("collapsed");
+    h.nextElementSibling.classList.toggle("hidden");
+  });
+});
+
+
+
+
+
+
+fetch(`${SERVER}/state`).then(r=>r.json())
+  .then(s=>{ if(s.n>0){ pushHistory(s); applyState(s); } })
+  .catch(()=>{});
+</script>
+
+<!-- ── Load Graph Modal ───────────────────────────────────────────────── -->
+<div id="loadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);
+     z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#0c1018;border:1px solid #1e3048;border-radius:8px;
+              padding:24px;width:540px;display:flex;flex-direction:column;gap:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-family:Syne,sans-serif;font-weight:800;font-size:14px;
+                   color:#c8daf0;letter-spacing:.06em">LOAD GRAPH</span>
+      <button onclick="closeModal()" style="background:none;border:none;color:#334d68;
+              font-size:20px;cursor:pointer;line-height:1">&#x2715;</button>
+    </div>
+    <div style="font-size:10px;color:#334d68;line-height:1.9">
+      Paste your n&#xd7;n adjacency matrix &#8212; one row per line, space-separated.<br>
+      <span style="color:#9ab0cc">n is detected automatically from the first row.</span>
+    </div>
+    <textarea id="matrixInput" spellcheck="false" oninput="onMatrixInput()"
+      style="width:100%;height:280px;background:#07090f;border:1px solid #1e3048;
+             border-radius:4px;color:#c8daf0;font-family:'JetBrains Mono',monospace;
+             font-size:11px;padding:10px;resize:vertical;line-height:1.8;outline:none;"
+      placeholder="0 1 1&#10;1 0 1&#10;1 1 0"></textarea>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span id="matrixInfo" style="font-size:10px;color:#334d68;flex:1">Paste a matrix above.</span>
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" id="loadSubmitBtn" onclick="submitGraph()" disabled>Load &amp; Run</button>
+    </div>
+    <div id="loadError" style="font-size:10px;color:#e53935;display:none;"></div>
+  </div>
+</div>
+
+<script>
+function openModal() {
+  document.getElementById("loadModal").style.display = "flex";
+  setTimeout(() => document.getElementById("matrixInput").focus(), 50);
+}
+function closeModal() {
+  document.getElementById("loadModal").style.display = "none";
+  document.getElementById("loadError").style.display = "none";
+}
+function parseMatrix(raw) {
+  const rows = raw.trim().split("\n").map(r => r.trim()).filter(r => r.length > 0);
+  if (!rows.length) return null;
+  const n = rows[0].split(/\s+/).length;
+  if (rows.length !== n)
+    return { error: `Matrix must be square. Got ${rows.length} rows but first row has ${n} values.` };
+  const matrix = [];
+  for (let i = 0; i < n; i++) {
+    const vals = rows[i].split(/\s+/).map(Number);
+    if (vals.length !== n) return { error: `Row ${i+1}: expected ${n} values, got ${vals.length}.` };
+    if (vals.some(v => v !== 0 && v !== 1)) return { error: `Row ${i+1}: only 0 and 1 allowed.` };
+    matrix.push(vals);
+  }
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++)
+      if (matrix[i][j] !== matrix[j][i])
+        return { error: `Not symmetric at [${i}][${j}].` };
+  const edges = matrix.reduce((s,r) => s+r.reduce((a,b)=>a+b,0),0)/2;
+  return { n, matrix, edges };
+}
+function onMatrixInput() {
+  const raw  = document.getElementById("matrixInput").value;
+  const info = document.getElementById("matrixInfo");
+  const btn  = document.getElementById("loadSubmitBtn");
+  document.getElementById("loadError").style.display = "none";
+  const r = parseMatrix(raw);
+  if (!r) { info.textContent="Paste a matrix above."; info.style.color="#334d68"; btn.disabled=true; }
+  else if (r.error) { info.textContent="⚠ "+r.error; info.style.color="#e53935"; btn.disabled=true; }
+  else { info.textContent=`✓  ${r.n}×${r.n} — ${r.edges} edges`; info.style.color="#43a047"; btn.disabled=false; }
+}
+async function submitGraph() {
+  const raw   = document.getElementById("matrixInput").value;
+  const errEl = document.getElementById("loadError");
+  errEl.style.display = "none";
+  const result = parseMatrix(raw);
+  if (!result || result.error) { errEl.textContent=result?.error||"Invalid."; errEl.style.display="block"; return; }
+  stopPlay();
+  selectedNodeId=null; posCache={}; history.length=0; historyIdx=-1;
+  nodeG.selectAll("*").remove(); linkG.selectAll("*").remove();
+  document.getElementById("empty").style.display="flex";
+  document.getElementById("scrubber-bar").style.display="none";
+  document.getElementById("backBtn").disabled=true;
+  try {
+    const state = await fetch(`${SERVER}/load`,{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({n:result.n, matrix:result.matrix})
+    }).then(r=>r.json());
+    if (state.error) throw new Error(state.error);
+    // Push to history and render
+    pushHistory(state);
+    applyState(state);
+    document.getElementById("empty").style.display = "none";
+    closeModal();
+  } catch(e) { errEl.textContent="Server error: "+e.message; errEl.style.display="block"; }
+}
+document.getElementById("loadBtn").addEventListener("click", e=>{ e.currentTarget.blur(); openModal(); });
+document.getElementById("loadModal").addEventListener("click", e=>{ if(e.target===e.currentTarget) closeModal(); });
+</script>
+
+</body>
+</html>
