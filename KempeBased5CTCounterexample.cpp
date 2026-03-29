@@ -248,7 +248,8 @@ void restoreNode (int node, int nodes, std::vector <std::vector<int>>& graph, st
 int main () {
 
     std::vector <std::vector<int>> graph;
-    std::vector <int> colors;
+    std::vector <int> colors = {0, 3, 4, 2, 1, 5, 1, 5, 3, 4, 5, 1, 2, 3, 2, 5, 4, 2, 5, 4, 3, 2, 3, 1, 4, 2, 1, 3, 2, 5, 5, 2, 4, 4, 3};
+
 
     int n;
 
@@ -259,39 +260,44 @@ int main () {
 
     std::vector <std::vector<int>> copy (graph);
 
-    // colors.resize(n);
-    // std::fill(colors.begin(), colors.end(), 0);
-    colors.assign(n, 0);
+    int degree;
 
     //stack
     std::stack <int> deletedNodes;
-    std::set <int> recoveredNodes;
+    std::set <int> recoveredNodes = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34};
 
+    int DeletedNodes = 1;
 
-    int numDeletedNodes = 0;
+    int toBeDeletedNodes [DeletedNodes] = {0};
+
     int index  = 0;
 
     // viz::waitForStep(); 
-    viz::printState(graph, colors, numDeletedNodes, graph[0].size()-1, false ? "done" : "running");
-    while(numDeletedNodes < n) {
-        if(graph[index%n][n] < 6 && graph[index%n][n] >= 0 && colors[index%n] == 0) {
-            viz::waitForStep(); 
-            std::cerr<<" "<< index%n;
-            deleteNode(graph, index%n, deletedNodes);
-            numDeletedNodes++;
-            viz::printState(graph, colors, numDeletedNodes, n, false ? "done" : "running");
-        }
-        index++;
-    }
+    viz::printState(graph, colors, DeletedNodes, graph[0].size()-1, false ? "done" : "running");
 
+    // while(numDeletedNodes < n) {
+    //     if(graph[index%n][n] < 6 && graph[index%n][n] >= 0 && colors[index%n] == 0) {
+    //         viz::waitForStep(); 
+    //         std::cerr<<" "<< index%n;
+    //         deleteNode(graph, index%n, deletedNodes);
+    //         numDeletedNodes++;
+    //         viz::printState(graph, colors, numDeletedNodes, n, false ? "done" : "running");
+    //     }
+    //     index++;
+    // }
+    
+    // we assume a case where we deleted all nodes < 6 and in restoring nodes, we reach the counterexample case.
+    // Now there is only 1 deleted node left that has to be restored and then coloured.
+    for(int i = 0 ; i < DeletedNodes; i++) {
+        deleteNode(graph, toBeDeletedNodes[i], deletedNodes);
+    }
 
 
     while(recoveredNodes.size() < n) {
         viz::waitForStep();
-        // std::cerr<<deletedNodes.top();
+        std::cerr<<deletedNodes.top();
         restoreNode(deletedNodes.top(), n, graph, copy, recoveredNodes);
         colors[deletedNodes.top()] = colour(graph, colors, deletedNodes.top());
-
         if(colors[deletedNodes.top()] == 0) {
             std::cerr<<"err";
         }

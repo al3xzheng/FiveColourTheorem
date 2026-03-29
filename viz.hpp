@@ -28,7 +28,6 @@ inline void waitForStep() {
 // Reads graph JSON from stdin, populates graph (n x n+1), colors (size n), sets n
 inline bool loadGraph(
     std::vector<std::vector<int>>& graph,
-    std::vector<int>&              colors,
     int&                           n
 ) {
     std::string line;
@@ -57,7 +56,6 @@ inline bool loadGraph(
 
     // Allocate: n rows, n+1 cols (last col = degree)
     graph.assign(n, std::vector<int>(n + 1, 0));
-    colors.assign(n, 0);
 
     // Read n x n matrix
     pos = line.find("\"matrix\"");

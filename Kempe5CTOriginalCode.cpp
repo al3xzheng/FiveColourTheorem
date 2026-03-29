@@ -4,8 +4,6 @@
 #include <stack>
 #include <cstring>
 
-// INPUT: NUMBER OF NODES
-
 #include "viz.hpp"
 
 // Toggles kempe chain of colours c1, c2 containing node: node, where c1 is the colour of node.
@@ -252,16 +250,26 @@ int main () {
 
     int n;
 
-    if (!viz::loadGraph(graph, n)) {
+    if (!viz::loadGraph(graph, colors, n)) {
         std::cerr << "[main] No graph received from server. Run via: python server.py --binary ./program.exe" << std::endl;
         return 1;
     }
 
     std::vector <std::vector<int>> copy (graph);
 
-    // colors.resize(n);
-    // std::fill(colors.begin(), colors.end(), 0);
-    colors.assign(n, 0);
+    colors.resize(n);
+    std::fill(colors.begin(), colors.end(), 0);
+
+    int degree;
+
+    // // Store degree of each node at end
+    // for(int i = 0 ; i < graph[0].size();i++) {
+    //     degree = 0;
+    //     for(int j = 0 ; j < graph[0].size();j++) {
+    //         degree += graph[i][j];
+    //     }
+    //     graph[i].push_back(degree);{"n":3,"matrix":[[0,1,1],[1,0,1],[1,1,0]]}
+    // }
 
     //stack
     std::stack <int> deletedNodes;
@@ -270,9 +278,10 @@ int main () {
 
     int numDeletedNodes = 0;
     int index  = 0;
-
+    
     // viz::waitForStep(); 
     viz::printState(graph, colors, numDeletedNodes, graph[0].size()-1, false ? "done" : "running");
+
     while(numDeletedNodes < n) {
         if(graph[index%n][n] < 6 && graph[index%n][n] >= 0 && colors[index%n] == 0) {
             viz::waitForStep(); 
@@ -288,10 +297,9 @@ int main () {
 
     while(recoveredNodes.size() < n) {
         viz::waitForStep();
-        // std::cerr<<deletedNodes.top();
+        std::cerr<<deletedNodes.top();
         restoreNode(deletedNodes.top(), n, graph, copy, recoveredNodes);
         colors[deletedNodes.top()] = colour(graph, colors, deletedNodes.top());
-
         if(colors[deletedNodes.top()] == 0) {
             std::cerr<<"err";
         }

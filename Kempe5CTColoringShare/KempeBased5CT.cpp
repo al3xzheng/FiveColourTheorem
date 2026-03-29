@@ -264,15 +264,6 @@ int main () {
 
     int degree;
 
-    // // Store degree of each node at end
-    // for(int i = 0 ; i < graph[0].size();i++) {
-    //     degree = 0;
-    //     for(int j = 0 ; j < graph[0].size();j++) {
-    //         degree += graph[i][j];
-    //     }
-    //     graph[i].push_back(degree);{"n":3,"matrix":[[0,1,1],[1,0,1],[1,1,0]]}
-    // }
-
     //stack
     std::stack <int> deletedNodes;
     std::set <int> recoveredNodes;
