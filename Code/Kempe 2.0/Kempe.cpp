@@ -263,12 +263,12 @@ void deleteNode(std::vector <std::vector<int>>& graph, int node, std::vector <in
 
 }
 
-// Postprocessor that returns if a deleted node no longer satisfies 4-colouring => 5 colour theorem.
+// Postprocessor that returns if a deleted node: Node no longer satisfies 4-colouring => 5 colour theorem.
 bool deletedNodeError(std::vector <std::vector<int>>& graph, int node, std::vector <int>& colors) {
 
     // Checks neighbours and see if there's a same colouring of adjacent nodes.
     for(int i = 0 ; i < (graph[0].size()-1); i++) {
-        if(graph[node][i] && colors[node] == colors[i])
+        if(graph[node][i] == 1 && colors[node] == colors[i])
             return true;
     }
 
